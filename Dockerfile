@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ## install apps
 RUN \
   apt-get update && \
-  apt-get install -y sudo vim iputils-ping wget curl tar apt-transport-https software-properties-common python-software-properties git supervisor
+  apt-get install -y sudo vim iputils-ping wget curl apt-transport-https software-properties-common python-software-properties git supervisor
 
 ## install java 8
 RUN \
@@ -17,14 +17,16 @@ RUN \
 ENV JAVA_HOME /usr/lib/jvm/java-8-oracle
 RUN java -version
 
-## Install Nexus 3
 ARG NEXUS_VERSION=3.3.1-01
 ARG NEXUS_DOWNLOAD_URL=https://download.sonatype.com/nexus/3/nexus-${NEXUS_VERSION}-unix.tar.gz
+
+# install nexus runtime
 ENV SONATYPE_DIR=/opt/sonatype
 ENV NEXUS_HOME=${SONATYPE_DIR}/nexus \
   NEXUS_DATA=/nexus-data \
   NEXUS_CONTEXT='' \
   SONATYPE_WORK=${SONATYPE_DIR}/sonatype-work
+
 RUN mkdir -p ${NEXUS_HOME} \
   && curl --fail --silent --location --retry 3 \
     ${NEXUS_DOWNLOAD_URL} \
@@ -32,7 +34,7 @@ RUN mkdir -p ${NEXUS_HOME} \
   | tar x -C ${NEXUS_HOME} --strip-components=1 nexus-${NEXUS_VERSION} \
   && chown -R root:root ${NEXUS_HOME}
 
-## Configure Nexus
+# configure nexus
 RUN sed \
     -e '/^nexus-context/ s:$:${NEXUS_CONTEXT}:' \
     -i ${NEXUS_HOME}/etc/nexus-default.properties \
@@ -40,20 +42,20 @@ RUN sed \
     -e '/^-Xms/d' \
     -e '/^-Xmx/d' \
     -i ${NEXUS_HOME}/bin/nexus.vmoptions
+
 RUN useradd -r -u 200 -m -c "nexus role account" -d ${NEXUS_DATA} -s /bin/false nexus \
   && mkdir -p ${NEXUS_DATA}/etc ${NEXUS_DATA}/log ${NEXUS_DATA}/tmp ${SONATYPE_WORK} \
   && ln -s ${NEXUS_DATA} ${SONATYPE_WORK}/nexus3 \
   && chown -R nexus:nexus ${NEXUS_DATA}
+
+RUN ls -al ${NEXUS_DATA}
+
+VOLUME ${NEXUS_DATA}
+#EXPOSE 8081
+#USER nexus
 WORKDIR ${NEXUS_HOME}
+RUN pwd
 ENV INSTALL4J_ADD_VM_PARAMS="-Xms1200m -Xmx1200m"
-## Custom Config Override to support SSL at port 8443
-COPY jetty-https.xml /opt/sonatype/nexus/jetty/jetty-https.xml
-COPY nexus.properties /nexus-data/etc/
-
-## Cleanup
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
-
-USER nexus
 
 ## Use supervisor 
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
